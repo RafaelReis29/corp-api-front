@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corp Financial API - Management Dashboard</title>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./styles.css">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="./app.js"></script>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-neonGreen selection:text-bgDark">
+
+  <!-- TOP HEADER -->
+  <header class="bg-cardDark border-b border-borderDark sticky top-0 z-30 px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-lg bg-neonGreen/10 border border-neonGreen flex items-center justify-center text-neonGreen font-bold text-xl">
+        <i class="fa-solid me-0 fa-chart-pie"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+          Corp Financial <span class="text-neonGreen">API</span>
+        </h1>
+        <p class="text-xs text-gray-400">B2B Financial Management Control Panel</p>
+      </div>
+    </div>
+
+    <!-- API Link & Live Status -->
+    <div class="flex items-center gap-3 sm:gap-6 flex-wrap">
+      <div id="apiStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-borderDark text-xs font-medium">
+        <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" id="statusDot"></span>
+        <span id="statusText" class="text-gray-300">Checking API...</span>
+      </div>
+
+      <a href="https://corp-financial-api.onrender.com/swagger-ui/index.html#" target="_blank" rel="noopener noreferrer" 
+         class="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-neonGreen/10 hover:bg-neonGreen/20 text-neonGreen border border-neonGreen/40 transition-all">
+        <i class="fa-solid fa-code text-xs"></i>
+        <span>Swagger UI Docs</span>
+        <i class="fa-solid fa-arrow-up-right-from-square text-[10px] opacity-70"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN WRAPPER -->
+  <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-full md:w-64 bg-cardDark/60 border-r border-borderDark flex-shrink-0 p-4 flex flex-row md:flex-col justify-between overflow-x-auto md:overflow-y-auto gap-2">
+      <nav class="flex md:flex-col gap-1.5 w-full">
+        <button data-action="switch-tab" data-tab="dashboard" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50 transition-all">
+          <i class="fa-solid fa-chart-line w-5 text-center text-neonGreen"></i>
+          <span>Overview</span>
+        </button>
+
+        <div class="hidden md:block my-2 border-t border-borderDark/60"></div>
+        <span class="hidden md:block text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-4 mb-1">Entities</span>
+
+        <button data-action="switch-tab" data-tab="companies" id="nav-companies" class="nav-btn w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50 transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-building w-5 text-center text-blue-400"></i>
+            <span>Companies</span>
+          </div>
+          <span id="count-companies" class="text-xs bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full">--</span>
+        </button>
+
+        <button data-action="switch-tab" data-tab="contacts" id="nav-contacts" class="nav-btn w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50 transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-address-book w-5 text-center text-purple-400"></i>
+            <span>Contacts</span>
+          </div>
+          <span id="count-contacts" class="text-xs bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full">--</span>
+        </button>
+
+        <button data-action="switch-tab" data-tab="contracts" id="nav-contracts" class="nav-btn w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50 transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-file-contract w-5 text-center text-amber-400"></i>
+            <span>Contracts</span>
+          </div>
+          <span id="count-contracts" class="text-xs bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full">--</span>
+        </button>
+
+        <button data-action="switch-tab" data-tab="payment-methods" id="nav-payment-methods" class="nav-btn w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50 transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-credit-card w-5 text-center text-emerald-400"></i>
+            <span>Payment Methods</span>
+          </div>
+          <span id="count-payment-methods" class="text-xs bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full">--</span>
+        </button>
+
+        <button data-action="switch-tab" data-tab="invoices" id="nav-invoices" class="nav-btn w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50 transition-all">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-receipt w-5 text-center text-pink-400"></i>
+            <span>Invoices</span>
+          </div>
+          <span id="count-invoices" class="text-xs bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full">--</span>
+        </button>
+      </nav>
+
+      <!-- BASE URL INFO BOX -->
+      <div class="hidden md:block p-3 rounded-xl bg-cardDark border border-borderDark text-xs mt-4">
+        <div class="text-gray-400 font-semibold mb-1 flex items-center gap-1.5">
+          <i class="fa-solid fa-server text-neonGreen"></i> Target API Server
+        </div>
+        <p class="text-[11px] text-gray-400 truncate font-mono">https://corp-financial-api.onrender.com</p>
+        <p class="text-[10px] text-gray-500 mt-1">Note: Render free tier may take 30-50s to spin up if idle.</p>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="flex-1 p-4 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
+
+      <!-- COLD START / CONNECTION BANNER -->
+      <div id="coldStartBanner" class="hidden mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3 text-sm">
+        <i class="fa-solid fa-circle-notch fa-spin text-amber-400 text-lg"></i>
+        <div>
+          <span class="font-semibold">Waking up API Server...</span> Render instances go to sleep after inactivity. The first request might take 50 seconds or more. Please wait while we reconnect.
+        </div>
+      </div>
+
+      <!-- ACTIVE FILTER BANNER (For Relational Navigation) -->
+      <div id="filterBanner" class="hidden mb-6 p-3 px-4 rounded-xl bg-neonGreen/10 border border-neonGreen/30 flex items-center justify-between text-sm">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-filter text-neonGreen"></i>
+          <span class="text-gray-300">Active Filter:</span>
+          <span id="filterDescription" class="font-semibold text-white"></span>
+        </div>
+        <button data-action="clear-filter" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-gray-300 transition-all">
+          <i class="fa-solid fa-xmark mr-1"></i> Clear Filter
+        </button>
+      </div>
+
+      <!-- SECTION: DASHBOARD / OVERVIEW -->
+      <section id="sec-dashboard" class="tab-content space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-white tracking-tight">Executive Dashboard</h2>
+            <p class="text-sm text-gray-400">Overview of corporate entities, active contracts & financial health</p>
+          </div>
+          <button data-action="refresh-data" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cardDark border border-borderDark hover:border-neonGreen/50 text-xs font-semibold text-gray-200 transition-all">
+            <i class="fa-solid fa-rotate text-neonGreen"></i> Refresh Stats
+          </button>
+        </div>
+
+        <!-- STAT CARDS -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="p-5 rounded-2xl bg-cardDark border border-borderDark hover:border-neonGreen/30 transition-all">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-medium text-gray-400">Total Companies</p>
+                <h3 id="stat-companies" class="text-2xl font-bold text-white mt-1">--</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <i class="fa-solid fa-building text-lg"></i>
+              </div>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
+              <i class="fa-solid fa-check-circle text-neonGreen"></i> Active B2B client accounts
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-cardDark border border-borderDark hover:border-neonGreen/30 transition-all">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-medium text-gray-400">Active Contracts</p>
+                <h3 id="stat-contracts" class="text-2xl font-bold text-white mt-1">--</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <i class="fa-solid fa-file-contract text-lg"></i>
+              </div>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
+              <span id="stat-contract-val" class="text-neonGreen font-semibold">--</span> total portfolio value
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-cardDark border border-borderDark hover:border-neonGreen/30 transition-all">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-medium text-gray-400">Total Invoices</p>
+                <h3 id="stat-invoices" class="text-2xl font-bold text-white mt-1">--</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                <i class="fa-solid fa-receipt text-lg"></i>
+              </div>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
+              <span id="stat-paid-count" class="text-neonGreen font-semibold">--</span> paid
+            </p>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-cardDark border border-borderDark hover:border-neonGreen/30 transition-all">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="text-xs font-medium text-gray-400">Contacts Registered</p>
+                <h3 id="stat-contacts" class="text-2xl font-bold text-white mt-1">--</h3>
+              </div>
+              <div class="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                <i class="fa-solid fa-users text-lg"></i>
+              </div>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
+              Key enterprise decision makers
+            </p>
+          </div>
+        </div>
+
+        <!-- QUICK ACTION FLOWS & API SWAGGER HIGHLIGHT -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 p-6 rounded-2xl bg-cardDark border border-borderDark space-y-4">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-diagram-project text-neonGreen"></i> Recommended Operational Flow
+            </h3>
+            <p class="text-xs text-gray-400 leading-relaxed">
+              Use the relational navigation buttons in any record table to seamlessly switch context across related B2B financial entities:
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div class="p-3.5 rounded-xl bg-bgDark border border-borderDark text-xs">
+                <span class="text-neonGreen font-bold">1. Companies</span>
+                <p class="text-gray-400 text-[11px] mt-1">Create client company, then jump directly to its Contacts or Payment Methods.</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-bgDark border border-borderDark text-xs">
+                <span class="text-amber-400 font-bold">2. Contracts</span>
+                <p class="text-gray-400 text-[11px] mt-1">Attach active service contracts with custom currency & total values.</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-bgDark border border-borderDark text-xs">
+                <span class="text-pink-400 font-bold">3. Invoices</span>
+                <p class="text-gray-400 text-[11px] mt-1">Generate payment invoices per contract linked to payment methods.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-gradient-to-br from-cardDark to-bgDark border border-neonGreen/30 flex flex-col justify-between">
+            <div>
+              <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-neonGreen/10 text-neonGreen text-xs font-semibold mb-3">
+                <i class="fa-solid fa-book-open"></i> OpenAPI 3.1
+              </div>
+              <h3 class="text-lg font-bold text-white">Live API Specification</h3>
+              <p class="text-xs text-gray-400 mt-2">
+                Explore raw endpoints, test schemas, and inspect HATEOAS responses in the official Swagger UI.
+              </p>
+            </div>
+            <a href="https://corp-financial-api.onrender.com/swagger-ui/index.html#" target="_blank" 
+               class="mt-6 w-full text-center py-2.5 px-4 rounded-xl bg-neonGreen hover:bg-neonGreenHover text-bgDark font-bold text-xs transition-all shadow-lg shadow-neonGreen/10">
+               Open Swagger UI <i class="fa-solid fa-arrow-up-right-from-square ml-1.5"></i>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- DYNAMIC ENTITY SECTIONS CONTAINER (Companies, Contacts, Contracts, Payment Methods, Invoices) -->
+      <div id="entitySectionsContainer"></div>
+
+    </main>
+  </div>
+
+  <!-- MODAL DIALOG (CREATE / EDIT) -->
+  <div id="crudModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-cardDark border border-borderDark rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="px-6 py-4 border-b border-borderDark flex items-center justify-between bg-bgDark/50">
+        <h3 id="modalTitle" class="text-lg font-bold text-white flex items-center gap-2"></h3>
+        <button data-action="close-modal" class="text-gray-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="crudForm" class="p-6 space-y-4 overflow-y-auto flex-1">
+        <div id="modalFormFields" class="space-y-4"></div>
+      </form>
+
+      <div class="px-6 py-3.5 border-t border-borderDark bg-bgDark/50 flex items-center justify-end gap-3">
+        <button data-action="close-modal" class="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:bg-borderDark transition-all">Cancel</button>
+        <button type="submit" form="crudForm" class="px-5 py-2 rounded-xl bg-neonGreen hover:bg-neonGreenHover text-bgDark font-bold text-xs transition-all shadow-md shadow-neonGreen/10">
+          Save Entity
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM DELETE MODAL -->
+  <div id="deleteModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-cardDark border border-borderDark rounded-2xl w-full max-w-md p-6 space-y-4 text-center">
+      <div class="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto text-xl">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 class="text-lg font-bold text-white">Delete Record</h3>
+      <p class="text-xs text-gray-400" id="deleteConfirmText">Are you sure you want to delete this record? This action cannot be undone.</p>
+      
+      <div class="flex items-center justify-center gap-3 pt-2">
+        <button data-action="close-delete-modal" class="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:bg-borderDark transition-all">Cancel</button>
+        <button id="confirmDeleteBtn" data-action="confirm-delete" class="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-all">
+          Yes, Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+</body>
+</html>

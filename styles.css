@@ -1,0 +1,35 @@
+    body {
+      background-color: #131126;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #131126;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2a264e;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #52e085;
+    }
+
+    .neon-border {
+      box-shadow: 0 0 10px rgba(82, 224, 133, 0.15);
+    }
+
+    .neon-text-glow {
+      text-shadow: 0 0 8px rgba(82, 224, 133, 0.4);
+    }
+
+    /* Method Badges */
+    .badge-get { background-color: rgba(82, 224, 133, 0.15); color: #52e085; border: 1px solid #52e085; }
+    .badge-post { background-color: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid #a855f7; }
+    .badge-put { background-color: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid #eab308; }
+    .badge-delete { background-color: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid #ef4444; }
