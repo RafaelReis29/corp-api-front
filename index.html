@@ -14,7 +14,8 @@
   <link rel="stylesheet" href="./styles.css">
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="./app.js"></script>
+  <script src="./api.js" defer></script>
+  <script src="./app.js" defer></script>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-neonGreen selection:text-bgDark">
 
@@ -39,7 +40,7 @@
         <span id="statusText" class="text-gray-300">Checking API...</span>
       </div>
 
-      <a href="https://corp-financial-api.onrender.com/swagger-ui/index.html#" target="_blank" rel="noopener noreferrer" 
+      <a href="https://corp-financial-api.onrender.com/swagger-ui/index.html" data-swagger-link target="_blank" rel="noopener noreferrer"
          class="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-neonGreen/10 hover:bg-neonGreen/20 text-neonGreen border border-neonGreen/40 transition-all">
         <i class="fa-solid fa-code text-xs"></i>
         <span>Swagger UI Docs</span>
@@ -50,7 +51,7 @@
 
   <!-- MAIN WRAPPER -->
   <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
-    
+
     <!-- SIDEBAR NAVIGATION -->
     <aside class="w-full md:w-64 bg-cardDark/60 border-r border-borderDark flex-shrink-0 p-4 flex flex-row md:flex-col justify-between overflow-x-auto md:overflow-y-auto gap-2">
       <nav class="flex md:flex-col gap-1.5 w-full">
@@ -108,13 +109,28 @@
         <div class="text-gray-400 font-semibold mb-1 flex items-center gap-1.5">
           <i class="fa-solid fa-server text-neonGreen"></i> Target API Server
         </div>
-        <p class="text-[11px] text-gray-400 truncate font-mono">https://corp-financial-api.onrender.com</p>
+        <p id="currentApiUrl" class="text-[11px] text-gray-400 break-all font-mono"></p>
         <p class="text-[10px] text-gray-500 mt-1">Note: Render free tier may take 30-50s to spin up if idle.</p>
       </div>
     </aside>
 
     <!-- CONTENT AREA -->
     <main class="flex-1 p-4 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
+
+      <form id="connectionForm" class="connection-panel" aria-label="API connection">
+        <label>API URL <input id="apiUrl" type="url" required></label>
+        <label>API key <input id="apiKey" type="password" autocomplete="off" placeholder="Enter a client key"></label>
+        <label>API version
+          <select id="apiVersion">
+            <option value="1.0.0">1.0.0</option>
+            <option value="1.0.1">1.0.1</option>
+            <option value="2.0.0" selected>2.0.0</option>
+          </select>
+        </label>
+        <button type="submit" class="connection-primary">Connect</button>
+        <button type="button" data-action="use-demo">Use demo</button>
+        <p id="connectionStatus" role="status"></p>
+      </form>
 
       <!-- COLD START / CONNECTION BANNER -->
       <div id="coldStartBanner" class="hidden mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3 text-sm">
@@ -161,7 +177,7 @@
               </div>
             </div>
             <p class="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
-              <i class="fa-solid fa-check-circle text-neonGreen"></i> Active B2B client accounts
+              <i class="fa-solid fa-check-circle text-neonGreen"></i> Companies associated with the selected account
             </p>
           </div>
 
@@ -176,7 +192,7 @@
               </div>
             </div>
             <p class="text-[11px] text-gray-500 mt-3 flex items-center gap-1">
-              <span id="stat-contract-val" class="text-neonGreen font-semibold">--</span> total portfolio value
+              <span id="stat-contract-val" class="text-neonGreen font-semibold">--</span> total value by currency
             </p>
           </div>
 
@@ -246,7 +262,7 @@
                 Explore raw endpoints, test schemas, and inspect HATEOAS responses in the official Swagger UI.
               </p>
             </div>
-            <a href="https://corp-financial-api.onrender.com/swagger-ui/index.html#" target="_blank" 
+            <a href="https://corp-financial-api.onrender.com/swagger-ui/index.html" data-swagger-link target="_blank"
                class="mt-6 w-full text-center py-2.5 px-4 rounded-xl bg-neonGreen hover:bg-neonGreenHover text-bgDark font-bold text-xs transition-all shadow-lg shadow-neonGreen/10">
                Open Swagger UI <i class="fa-solid fa-arrow-up-right-from-square ml-1.5"></i>
             </a>
@@ -283,6 +299,14 @@
     </div>
   </div>
 
+  <dialog id="detailModal" class="record-dialog">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <h3 id="detailTitle" class="font-bold text-white">Record details</h3>
+      <form method="dialog"><button class="text-neonGreen">Close</button></form>
+    </div>
+    <pre id="detailBody" class="overflow-auto"></pre>
+  </dialog>
+
   <!-- CONFIRM DELETE MODAL -->
   <div id="deleteModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-cardDark border border-borderDark rounded-2xl w-full max-w-md p-6 space-y-4 text-center">
@@ -291,7 +315,7 @@
       </div>
       <h3 class="text-lg font-bold text-white">Delete Record</h3>
       <p class="text-xs text-gray-400" id="deleteConfirmText">Are you sure you want to delete this record? This action cannot be undone.</p>
-      
+
       <div class="flex items-center justify-center gap-3 pt-2">
         <button data-action="close-delete-modal" class="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:bg-borderDark transition-all">Cancel</button>
         <button id="confirmDeleteBtn" data-action="confirm-delete" class="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-all">
