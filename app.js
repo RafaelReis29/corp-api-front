@@ -1,30 +1,36 @@
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            bgDark: '#131126',
-            cardDark: '#1b1834',
-            borderDark: '#2a264e',
-            neonGreen: '#52e085',
-            neonGreenHover: '#3fd073',
-            neonPurple: '#a855f7',
-            neonYellow: '#eab308',
-            neonRed: '#ef4444',
-            neonBlue: '#3b82f6'
-          },
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-          }
-        }
-      }
-    };
+    const $ = id => document.getElementById(id);
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
 
-    const API_BASE = "https://corp-financial-api.onrender.com";
+    function connectionFromForm(key) {
+      return {
+        base: apiUrl($('apiUrl').value),
+        version: $('apiVersion').value,
+        key,
+        role: key === DEMO_KEY ? 'demo' : 'client',
+        controller: new AbortController()
+      };
+    }
+
+    function request(path, options, connection = state.connection) {
+      if (!connection) return Promise.reject(new Error('Connect to the API first.'));
+      const isDomainResource = !/^\/(accounts|api-keys)(?:[/?]|$)/.test(path);
+      const accountId = isDomainResource && connection.role === 'admin' ? connection.accountId : undefined;
+      return apiRequest({ ...connection, signal: connection.controller.signal }, path, { accountId, ...options });
+    }
+
+    function mayWrite(entity, method) {
+      if (state.connection?.role === 'admin') return Boolean(state.connection.accountId);
+      return state.connection?.role === 'client' && !(method === 'DELETE' && entity === 'companies');
+    }
 
     // Application State
     const state = {
       activeTab: 'dashboard',
+      connection: null,
+      connectionAttempt: 0,
+      pendingPost: null,
       activeFilter: null, // { entity: 'contacts', field: 'companyId', value: 3, label: 'Company #3' }
       editingEntity: null,
       editingId: null,
@@ -53,7 +59,7 @@
           { name: "sector", label: "Sector", type: "text" },
           { name: "email", label: "Email", type: "email" },
           { name: "phone", label: "Phone", type: "text" },
-          { name: "active", label: "Active Account", type: "checkbox", defaultValue: true }
+          { name: "active", label: "Active Company", type: "checkbox", defaultValue: true }
         ],
         columns: [
           { key: "id", label: "ID" },
@@ -66,7 +72,7 @@
         relationalActions: [
           { label: "Contacts", icon: "fa-users", entity: "contacts", field: "companyId", color: "text-purple-400 border-purple-500/30 bg-purple-500/10" },
           { label: "Contracts", icon: "fa-file-contract", entity: "contracts", field: "companyId", color: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
-          { label: "Payments", icon: "fa-credit-card", entity: "payment-methods", field: "companyId", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" }
+          { label: "Payment Methods", icon: "fa-credit-card", entity: "payment-methods", field: "companyId", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" }
         ]
       },
       contacts: {
@@ -87,7 +93,7 @@
         columns: [
           { key: "id", label: "ID" },
           { key: "name", label: "Name" },
-          { key: "companyId", label: "Company ID", format: val => `<button data-action="filter" data-entity="companies" data-field="id" data-value="${val}" data-label="Company #${val}" class="text-blue-400 hover:underline font-mono">#${val}</button>` },
+          { key: "companyId", label: "Company ID", format: val => `<button data-action="filter" data-entity="companies" data-field="id" data-value="${escapeHtml(val)}" data-label="Company #${escapeHtml(val)}" class="text-blue-400 hover:underline font-mono">#${escapeHtml(val)}</button>` },
           { key: "role", label: "Role" },
           { key: "email", label: "Email" },
           { key: "isPrimary", label: "Primary", format: val => val ? '<i class="fa-solid fa-star text-amber-400 text-xs"></i>' : '-' }
@@ -103,18 +109,18 @@
           { name: "companyId", label: "Company ID", type: "number", required: true },
           { name: "title", label: "Contract Title", type: "text", required: true },
           { name: "description", label: "Description", type: "textarea" },
-          { name: "totalValue", label: "Total Value", type: "number", step: "0.01" },
-          { name: "currency", label: "Currency (e.g. USD, BRL)", type: "text", defaultValue: "USD" },
-          { name: "startDate", label: "Start Date", type: "date" },
+          { name: "totalValue", label: "Total Value", type: "number", step: "0.01", min: "0.01", required: true },
+          { name: "currency", label: "Currency (e.g. USD, BRL)", type: "text", defaultValue: "BRL", required: true },
+          { name: "startDate", label: "Start Date", type: "date", required: true },
           { name: "endDate", label: "End Date", type: "date" },
-          { name: "status", label: "Status", type: "select", options: ["ACTIVE", "PENDING", "COMPLETED", "TERMINATED"], defaultValue: "ACTIVE" }
+          { name: "status", label: "Status", type: "select", options: ["ATIVO", "RASCUNHO", "SUSPENSO", "ENCERRADO", "CANCELADO"], defaultValue: "ATIVO" }
         ],
         columns: [
           { key: "id", label: "ID" },
           { key: "title", label: "Contract Title" },
-          { key: "companyId", label: "Company ID", format: val => `<button data-action="filter" data-entity="companies" data-field="id" data-value="${val}" data-label="Company #${val}" class="text-blue-400 hover:underline font-mono">#${val}</button>` },
-          { key: "totalValue", label: "Value", format: (val, row) => `<span class="font-bold text-white">${row.currency || '$'} ${Number(val || 0).toLocaleString()}</span>` },
-          { key: "status", label: "Status", format: val => `<span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30">${val || 'ACTIVE'}</span>` }
+          { key: "companyId", label: "Company ID", format: val => `<button data-action="filter" data-entity="companies" data-field="id" data-value="${escapeHtml(val)}" data-label="Company #${escapeHtml(val)}" class="text-blue-400 hover:underline font-mono">#${escapeHtml(val)}</button>` },
+          { key: "totalValue", label: "Value", format: (val, row) => `<span class="font-bold text-white">${escapeHtml(row.currency || '—')} ${Number(val || 0).toLocaleString()}</span>` },
+          { key: "status", label: "Status", format: val => `<span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30">${escapeHtml(val || 'ATIVO')}</span>` }
         ],
         relationalActions: [
           { label: "Invoices", icon: "fa-receipt", entity: "invoices", field: "contractId", color: "text-pink-400 border-pink-500/30 bg-pink-500/10" }
@@ -128,7 +134,7 @@
         embeddedKey: "paymentMethodList",
         fields: [
           { name: "companyId", label: "Company ID", type: "number", required: true },
-          { name: "type", label: "Type (e.g., CREDIT_CARD, PIX, WIRE)", type: "text", required: true },
+          { name: "type", label: "Type", type: "select", options: ["PIX", "BOLETO", "TRANSFERENCIA", "CARTAO"], defaultValue: "PIX", required: true },
           { name: "label", label: "Method Label", type: "text", required: true },
           { name: "provider", label: "Provider/Bank", type: "text" },
           { name: "details", label: "Details / Account Info", type: "textarea" },
@@ -138,7 +144,7 @@
         columns: [
           { key: "id", label: "ID" },
           { key: "label", label: "Label" },
-          { key: "companyId", label: "Company ID", format: val => `<button data-action="filter" data-entity="companies" data-field="id" data-value="${val}" data-label="Company #${val}" class="text-blue-400 hover:underline font-mono">#${val}</button>` },
+          { key: "companyId", label: "Company ID", format: val => `<button data-action="filter" data-entity="companies" data-field="id" data-value="${escapeHtml(val)}" data-label="Company #${escapeHtml(val)}" class="text-blue-400 hover:underline font-mono">#${escapeHtml(val)}</button>` },
           { key: "type", label: "Type" },
           { key: "provider", label: "Provider" },
           { key: "isDefault", label: "Default", format: val => val ? '<i class="fa-solid fa-check text-neonGreen text-xs"></i>' : '-' }
@@ -154,22 +160,22 @@
           { name: "contractId", label: "Contract ID", type: "number", required: true },
           { name: "paymentMethodId", label: "Payment Method ID", type: "number" },
           { name: "description", label: "Invoice Description", type: "text" },
-          { name: "amount", label: "Amount", type: "number", step: "0.01" },
-          { name: "dueDate", label: "Due Date", type: "date" },
+          { name: "amount", label: "Amount", type: "number", step: "0.01", min: "0.01", required: true },
+          { name: "dueDate", label: "Due Date", type: "date", required: true },
           { name: "paidAt", label: "Paid At (Date Time)", type: "datetime-local" },
-          { name: "status", label: "Status", type: "select", options: ["OPEN", "PAID", "OVERDUE", "CANCELLED"], defaultValue: "OPEN" }
+          { name: "status", label: "Status", type: "select", options: ["PENDENTE", "PAGO", "VENCIDO", "ATRASADO", "CANCELADO"], defaultValue: "PENDENTE" }
         ],
         columns: [
           { key: "id", label: "ID" },
           { key: "description", label: "Description" },
-          { key: "contractId", label: "Contract ID", format: val => `<button data-action="filter" data-entity="contracts" data-field="id" data-value="${val}" data-label="Contract #${val}" class="text-amber-400 hover:underline font-mono">#${val}</button>` },
-          { key: "amount", label: "Amount", format: val => `<span class="font-bold text-white">$ ${Number(val || 0).toLocaleString()}</span>` },
+          { key: "contractId", label: "Contract ID", format: val => `<button data-action="filter" data-entity="contracts" data-field="id" data-value="${escapeHtml(val)}" data-label="Contract #${escapeHtml(val)}" class="text-amber-400 hover:underline font-mono">#${escapeHtml(val)}</button>` },
+          { key: "amount", label: "Amount", format: val => `<span class="font-bold text-white">${Number(val || 0).toLocaleString()}</span>` },
           { key: "dueDate", label: "Due Date" },
           { key: "status", label: "Status", format: val => {
             let color = "text-yellow-400 bg-yellow-500/10 border-yellow-500/30";
-            if (val === 'PAID') color = "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
-            if (val === 'OVERDUE') color = "text-red-400 bg-red-500/10 border-red-500/30";
-            return `<span class="px-2 py-0.5 rounded text-[10px] ${color} border">${val || 'OPEN'}</span>`;
+            if (val === 'PAGO') color = "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
+            if (['ATRASADO', 'VENCIDO'].includes(val)) color = "text-red-400 bg-red-500/10 border-red-500/30";
+            return `<span class="px-2 py-0.5 rounded text-[10px] ${color} border">${escapeHtml(val || 'PENDENTE')}</span>`;
           }}
         ]
       }
@@ -178,9 +184,10 @@
     // INIT
     window.addEventListener('DOMContentLoaded', () => {
       bindUiEvents();
+      bindAdminEvents();
       buildEntitySections();
-      checkApiHealth();
-      refreshAllData();
+      $('apiUrl').value = LOCAL_HOSTS.includes(location.hostname) ? 'http://localhost:8080' : PRODUCTION_API;
+      connect(DEMO_KEY);
     });
 
     function bindUiEvents() {
@@ -191,6 +198,13 @@
         if (!button) return;
 
         switch (button.dataset.action) {
+          case 'use-demo':
+            disconnect();
+            connect(DEMO_KEY);
+            break;
+          case 'view-entity':
+            viewRecord(button.dataset.entity, button.dataset.id);
+            break;
           case 'switch-tab':
             switchTab(button.dataset.tab);
             break;
@@ -238,29 +252,105 @@
         }
       });
 
-      document.getElementById('crudForm').addEventListener('submit', handleFormSubmit);
+      $('crudForm').addEventListener('submit', handleFormSubmit);
+      $('connectionForm').addEventListener('submit', event => {
+        event.preventDefault();
+        connect($('apiKey').value.trim() || keyForTarget());
+      });
+      $('apiVersion').addEventListener('change', () => connect($('apiKey').value.trim() || keyForTarget()));
+      document.addEventListener('submit', event => {
+        if (!event.target.matches('[data-find-entity]')) return;
+        event.preventDefault();
+        viewRecord(event.target.dataset.findEntity, new FormData(event.target).get('id'));
+      });
     }
 
-    // CHECK API HEALTH
-    async function checkApiHealth() {
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
-      const banner = document.getElementById('coldStartBanner');
+    function disconnect() {
+      state.connectionAttempt += 1;
+      state.connection?.controller.abort();
+      state.connection = null;
+      $('apiKey').value = '';
+      $('statusText').textContent = 'Disconnected';
+      $('statusDot').className = 'w-2.5 h-2.5 rounded-full bg-yellow-400';
+      renderAdminConnection();
+      resetRecords();
+    }
 
+    function keyForTarget() {
       try {
-        banner.classList.remove('hidden');
-        const res = await fetch(`${API_BASE}/companies`, { method: 'GET' });
-        if (res.ok) {
-          dot.className = "w-2.5 h-2.5 rounded-full bg-neonGreen";
-          text.innerText = "API Connected";
-          banner.classList.add('hidden');
-        } else {
-          throw new Error('API return non-200');
-        }
-      } catch (err) {
-        dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
-        text.innerText = "API Offline/Sleeping";
+        return state.connection?.base === apiUrl($('apiUrl').value) ? state.connection.key : DEMO_KEY;
+      } catch {
+        return DEMO_KEY;
       }
+    }
+
+    async function connect(key) {
+      let connection;
+      try {
+        connection = connectionFromForm(key);
+      } catch (error) {
+        $('connectionStatus').textContent = error.message;
+        return;
+      }
+      const attempt = ++state.connectionAttempt;
+      $('connectionStatus').textContent = 'Connecting…';
+      try {
+        if (connection.role === 'client') {
+          try {
+            connection.accounts = await request('/accounts', {}, connection);
+            connection.role = 'admin';
+            connection.adminPosts = new Map();
+            const previousAccountId = state.connection?.key === key && state.connection.base === connection.base
+              ? state.connection.accountId : undefined;
+            connection.accountId = connection.accounts.find(account => account.id === previousAccountId)?.id
+              ?? connection.accounts.find(account => account.demo)?.id ?? connection.accounts[0]?.id;
+          } catch (error) {
+            if (!(error instanceof ApiError) || error.status !== 403) throw error;
+          }
+        }
+        if (connection.role !== 'admin') await request('/companies?size=1', {}, connection);
+        if (attempt !== state.connectionAttempt) return;
+        state.connection?.controller.abort();
+        state.connection = connection;
+        $('apiKey').value = '';
+        $('currentApiUrl').textContent = connection.base;
+        document.querySelectorAll('[data-swagger-link]').forEach(link => {
+          link.href = connection.base + '/swagger-ui/index.html';
+        });
+        $('statusText').textContent = 'API Connected';
+        $('statusDot').className = 'w-2.5 h-2.5 rounded-full bg-neonGreen';
+        $('connectionStatus').textContent = connection.role === 'demo'
+          ? 'Demo account · read only'
+          : connection.role === 'admin' ? 'Administrator · select an account to access its records'
+            : 'Client key · records associated with your account';
+        renderAdminConnection();
+        resetRecords();
+        await refreshAllData();
+      } catch (error) {
+        if (attempt !== state.connectionAttempt) return;
+        if (state.connection) {
+          $('apiUrl').value = state.connection.base;
+          $('apiVersion').value = state.connection.version;
+        }
+        $('statusText').textContent = state.connection ? 'API Connected' : 'Connection failed';
+        $('connectionStatus').textContent = error.message;
+      }
+    }
+
+    function resetRecords() {
+      closeModal();
+      closeDeleteModal();
+      if ($('detailModal').open) $('detailModal').close();
+      clearFilter();
+      Object.keys(ENTITY_CONFIG).forEach(entity => {
+        state.cache[entity] = [];
+        renderEntityTable(entity);
+      });
+      updateCounters();
+      updateDashboardStats();
+      document.querySelectorAll('[data-requires-write]').forEach(button => {
+        button.hidden = !mayWrite(button.dataset.entity, 'POST');
+      });
     }
 
     // HELPER: HAL JSON / HATEOAS UNWRAPPER
@@ -286,18 +376,25 @@
     // FETCH DATA FOR AN ENTITY
     async function fetchEntityData(entityKey) {
       const config = ENTITY_CONFIG[entityKey];
+      const connection = state.connection;
+      if (!connection || (connection.role === 'admin' && !connection.accountId)) return;
       try {
-        const response = await fetch(`${API_BASE}${config.endpoint}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const json = await response.json();
-        const data = unwrapHateoas(json, entityKey);
-        state.cache[entityKey] = data;
+        const records = [];
+        let page = 0;
+        let totalPages;
+        do {
+          const result = await request(`${config.endpoint}?page=${page}&size=100`, {}, connection);
+          records.push(...unwrapHateoas(result, entityKey));
+          totalPages = result.page?.totalPages ?? 1;
+          page += 1;
+        } while (page < totalPages);
+
+        if (state.connection !== connection) return;
+        state.cache[entityKey] = records;
         renderEntityTable(entityKey);
         updateCounters();
-        return data;
-      } catch (err) {
-        console.warn(`Failed fetching ${entityKey}`, err);
-        renderTableError(entityKey, err.message);
+      } catch (error) {
+        if (state.connection === connection) renderTableError(entityKey, error.message);
       }
     }
 
@@ -314,11 +411,15 @@
       document.getElementById('stat-invoices').innerText = state.cache.invoices.length;
 
       // Contract total val
-      const totalVal = state.cache.contracts.reduce((sum, c) => sum + (parseFloat(c.totalValue) || 0), 0);
-      document.getElementById('stat-contract-val').innerText = `$ ${totalVal.toLocaleString()}`;
+      const totals = new Map();
+      for (const contract of state.cache.contracts) {
+        totals.set(contract.currency, (totals.get(contract.currency) || 0) + Number(contract.totalValue || 0));
+      }
+      $('stat-contract-val').textContent = [...totals].map(([currency, value]) =>
+        `${currency} ${value.toLocaleString()}`).join(' · ') || '—';
 
       // Paid invoices count
-      const paidInvoices = state.cache.invoices.filter(i => i.status === 'PAID').length;
+      const paidInvoices = state.cache.invoices.filter(i => i.status === 'PAGO').length;
       document.getElementById('stat-paid-count').innerText = `${paidInvoices} / ${state.cache.invoices.length}`;
     }
 
@@ -349,13 +450,13 @@
               </h2>
               <p class="text-xs text-gray-400">Perform CRUD actions and filter relational dependencies</p>
             </div>
-            
+
             <div class="flex items-center gap-2">
               <button data-action="fetch-entity" data-entity="${key}" class="p-2 rounded-xl bg-cardDark border border-borderDark hover:border-neonGreen/50 text-xs font-semibold text-gray-300 transition-all">
                 <i class="fa-solid fa-rotate text-neonGreen"></i>
               </button>
-              <button data-action="create-entity" data-entity="${key}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neonGreen hover:bg-neonGreenHover text-bgDark font-bold text-xs transition-all shadow-md shadow-neonGreen/10">
-                <i class="fa-solid fa-plus"></i> New ${config.title.slice(0, -1)}
+              <button data-action="create-entity" data-entity="${key}" data-requires-write hidden class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neonGreen hover:bg-neonGreenHover text-bgDark font-bold text-xs transition-all shadow-md shadow-neonGreen/10">
+                <i class="fa-solid fa-plus"></i> New record
               </button>
             </div>
           </div>
@@ -365,9 +466,14 @@
             <div class="p-4 border-b border-borderDark flex flex-wrap items-center justify-between gap-3 bg-bgDark/30">
               <div class="relative flex-1 max-w-xs">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-gray-500"></i>
-                <input type="text" id="search-${key}" data-action="search-entity" data-entity="${key}" placeholder="Search ${config.title.toLowerCase()}..." 
+                <input type="text" id="search-${key}" data-action="search-entity" data-entity="${key}" placeholder="Search ${config.title.toLowerCase()}..."
                        class="w-full bg-bgDark border border-borderDark rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-neonGreen">
               </div>
+              <form id="find-${key}" data-find-entity="${key}" class="flex items-center gap-2">
+                <input name="id" type="number" min="1" step="1" required aria-label="Record ID" placeholder="ID"
+                       class="w-20 bg-bgDark border border-borderDark rounded-xl px-2 py-1.5 text-xs text-white">
+                <button class="text-neonGreen font-semibold text-xs">Find by ID</button>
+              </form>
               <span id="showing-count-${key}" class="text-xs text-gray-400 font-mono">Showing all records</span>
             </div>
 
@@ -427,7 +533,7 @@
         const columnsHtml = config.columns.map(col => {
           let val = row[col.key];
           if (col.format) val = col.format(val, row);
-          else if (val === undefined || val === null) val = '-';
+          else val = val == null ? '—' : escapeHtml(val);
           return `<td class="px-4 py-3 whitespace-nowrap">${val}</td>`;
         }).join('');
 
@@ -437,7 +543,7 @@
           relationalHtml = `<td class="px-4 py-3 whitespace-nowrap"><div class="flex gap-1.5">`;
           config.relationalActions.forEach(act => {
             relationalHtml += `
-              <button data-action="filter" data-entity="${act.entity}" data-field="${act.field}" data-value="${row.id}" data-label="${config.title.slice(0, -1)} #${row.id}" 
+              <button data-action="filter" data-entity="${act.entity}" data-field="${act.field}" data-value="${escapeHtml(row.id)}" data-label="${config.title.slice(0, -1)} #${escapeHtml(row.id)}"
                       class="px-2 py-1 rounded-md text-[10px] font-semibold border ${act.color} hover:opacity-80 transition-all flex items-center gap-1">
                 <i class="fa-solid ${act.icon}"></i> ${act.label}
               </button>
@@ -451,12 +557,15 @@
             ${columnsHtml}
             ${relationalHtml}
             <td class="px-4 py-3 text-right whitespace-nowrap space-x-1">
-              <button data-action="edit-entity" data-entity="${key}" data-id="${row.id}" class="p-1.5 rounded-lg text-gray-400 hover:text-neonGreen hover:bg-borderDark transition-all" title="Edit">
+              <button data-action="view-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-300 hover:text-neonGreen" title="View record" aria-label="View record">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              ${mayWrite(key, 'PUT') ? `<button data-action="edit-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-400 hover:text-neonGreen hover:bg-borderDark transition-all" title="Edit" aria-label="Edit record">
                 <i class="fa-solid fa-pen-to-square"></i>
-              </button>
-              <button data-action="delete-entity" data-entity="${key}" data-id="${row.id}" class="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-borderDark transition-all" title="Delete">
+              </button>` : ''}
+              ${mayWrite(key, 'DELETE') ? `<button data-action="delete-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-borderDark transition-all" title="Delete" aria-label="Delete record">
                 <i class="fa-solid fa-trash-can"></i>
-              </button>
+              </button>` : ''}
             </td>
           </tr>
         `;
@@ -469,7 +578,7 @@
         <tr>
           <td colspan="10" class="p-8 text-center text-red-400">
             <i class="fa-solid fa-triangle-exclamation text-xl mb-1 block"></i>
-            Failed to load ${key}: ${errorMsg}
+            Failed to load ${key}: ${escapeHtml(errorMsg)}
           </td>
         </tr>`;
     }
@@ -477,7 +586,7 @@
     // RELATIONAL CROSS-FILTERING WORKFLOW
     function filterByEntity(targetEntity, field, value, label) {
       state.activeFilter = { targetEntity, field, value, label };
-      
+
       const filterBanner = document.getElementById('filterBanner');
       const filterDesc = document.getElementById('filterDescription');
       filterDesc.innerText = `Showing ${ENTITY_CONFIG[targetEntity].title} linked to ${label}`;
@@ -489,7 +598,7 @@
     function clearFilter() {
       state.activeFilter = null;
       document.getElementById('filterBanner').classList.add('hidden');
-      if (state.activeTab !== 'dashboard') {
+      if (ENTITY_CONFIG[state.activeTab]) {
         renderEntityTable(state.activeTab);
       }
     }
@@ -514,7 +623,7 @@
       const activeSec = document.getElementById(`sec-${tabId}`);
       if (activeSec) {
         activeSec.classList.remove('hidden');
-        if (tabId !== 'dashboard') {
+        if (ENTITY_CONFIG[tabId]) {
           renderEntityTable(tabId);
         }
       }
@@ -522,33 +631,62 @@
 
     // MODALS HANDLING
     function openCreateModal(entityKey) {
+      if (!mayWrite(entityKey, 'POST')) return;
+      state.pendingPost = null;
       state.editingEntity = entityKey;
       state.editingId = null;
 
       const config = ENTITY_CONFIG[entityKey];
-      document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus text-neonGreen"></i> New ${config.title.slice(0, -1)}`;
-
-      renderModalForm(config.fields, {});
-      document.getElementById('crudModal').classList.remove('hidden');
+      $('modalTitle').textContent = `New record · ${config.title}`;
+      const filter = state.activeFilter;
+      const defaults = filter?.targetEntity === entityKey ? { [filter.field]: filter.value } : {};
+      renderModalForm(config.fields, defaults);
+      $('crudModal').classList.remove('hidden');
     }
 
-    function openEditModal(entityKey, id) {
-      state.editingEntity = entityKey;
-      state.editingId = id;
+    async function readRecord(entity, id, connection = state.connection) {
+      const result = await request(`${ENTITY_CONFIG[entity].endpoint}/${encodeURIComponent(id)}`, {}, connection);
+      return result.company ?? result;
+    }
 
-      const config = ENTITY_CONFIG[entityKey];
-      const record = state.cache[entityKey].find(r => r.id == id);
+    async function viewRecord(entity, id) {
+      const connection = state.connection;
+      try {
+        const record = await readRecord(entity, id, connection);
+        if (connection !== state.connection) return;
+        showRecordDetails(`${ENTITY_CONFIG[entity].title} · #${id}`, record);
+      } catch (error) {
+        if (connection === state.connection) showToast(error.message, 'error');
+      }
+    }
 
-      document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square text-neonGreen"></i> Edit ${config.title.slice(0, -1)} #${id}`;
+    function showRecordDetails(title, record) {
+      $('detailTitle').textContent = title;
+      $('detailBody').textContent = JSON.stringify(record, null, 2);
+      if (!$('detailModal').open) $('detailModal').showModal();
+    }
 
-      renderModalForm(config.fields, record || {});
-      document.getElementById('crudModal').classList.remove('hidden');
+    async function openEditModal(entity, id) {
+      if (!mayWrite(entity, 'PUT')) return;
+      const connection = state.connection;
+      try {
+        const record = await readRecord(entity, id, connection);
+        if (connection !== state.connection) return;
+        state.editingEntity = entity;
+        state.editingId = id;
+        $('modalTitle').textContent = `Edit ${ENTITY_CONFIG[entity].title} · #${id}`;
+        renderModalForm(ENTITY_CONFIG[entity].fields, record);
+        $('crudModal').classList.remove('hidden');
+      } catch (error) {
+        if (connection === state.connection) showToast(error.message, 'error');
+      }
     }
 
     function renderModalForm(fields, data) {
       const formFieldsContainer = document.getElementById('modalFormFields');
       formFieldsContainer.innerHTML = fields.map(field => {
-        let val = data[field.name] !== undefined ? data[field.name] : (field.defaultValue !== undefined ? field.defaultValue : '');
+        const value = data[field.name] ?? field.defaultValue ?? '';
+        const val = field.type === 'datetime-local' && value ? String(value).slice(0, 19) : value;
 
         if (field.type === 'checkbox') {
           return `
@@ -562,17 +700,17 @@
         if (field.type === 'textarea') {
           return `
             <div>
-              <label class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
-              <textarea name="${field.name}" rows="3" ${field.required ? 'required' : ''}
-                        class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">${val}</textarea>
+              <label for="field-${field.name}" class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
+              <textarea id="field-${field.name}" name="${field.name}" rows="3" ${field.required ? 'required' : ''}
+                        class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">${escapeHtml(val)}</textarea>
             </div>`;
         }
 
         if (field.type === 'select') {
           return `
             <div>
-              <label class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
-              <select name="${field.name}" ${field.required ? 'required' : ''}
+              <label for="field-${field.name}" class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
+              <select id="field-${field.name}" name="${field.name}" ${field.required ? 'required' : ''}
                       class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">
                 ${field.options.map(opt => `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`).join('')}
               </select>
@@ -581,11 +719,21 @@
 
         return `
           <div>
-            <label class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
-            <input type="${field.type}" name="${field.name}" value="${val}" ${field.step ? `step="${field.step}"` : ''} ${field.required ? 'required' : ''}
+            <label for="field-${field.name}" class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
+            <input id="field-${field.name}" type="${field.type}" name="${field.name}" value="${escapeHtml(val)}" ${field.min ? `min="${field.min}"` : ''} ${field.step ? `step="${field.step}"` : ''} ${field.required ? 'required' : ''}
                    class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">
           </div>`;
       }).join('');
+      const status = $('crudForm').elements.namedItem('status');
+      const paidAt = $('crudForm').elements.namedItem('paidAt');
+      if (paidAt) {
+        const syncDate = () => {
+          paidAt.required = status.value === 'PAGO';
+          paidAt.disabled = !paidAt.required;
+        };
+        status.addEventListener('change', syncDate);
+        syncDate();
+      }
     }
 
     function closeModal() {
@@ -606,38 +754,47 @@
           payload[field.name] = formData.has(field.name);
         } else if (field.type === 'number') {
           const raw = formData.get(field.name);
-          payload[field.name] = raw !== '' ? Number(raw) : null;
+          payload[field.name] = raw ? Number(raw) : null;
         } else {
-          payload[field.name] = formData.get(field.name);
+          payload[field.name] = formData.get(field.name)?.trim() || null;
         }
       });
 
       const isEdit = state.editingId !== null;
-      const url = isEdit ? `${API_BASE}${config.endpoint}/${state.editingId}` : `${API_BASE}${config.endpoint}`;
       const method = isEdit ? 'PUT' : 'POST';
-
+      if (!mayWrite(entityKey, method)) return;
+      const submit = document.querySelector('[form="crudForm"][type="submit"]');
+      if (submit.disabled) return;
+      const connection = state.connection;
+      const endpoint = isEdit ? `${config.endpoint}/${state.editingId}` : config.endpoint;
+      let key;
+      if (!isEdit && connection.version === '2.0.0') {
+        const fingerprint = JSON.stringify(payload);
+        if (state.pendingPost?.fingerprint !== fingerprint) {
+          state.pendingPost = { fingerprint, key: idempotencyKey() };
+        }
+        key = state.pendingPost.key;
+      }
+      submit.disabled = true;
       try {
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) throw new Error(`Server returned status ${response.status}`);
-
-        showToast(`Record ${isEdit ? 'updated' : 'created'} successfully!`, 'success');
+        const result = await request(endpoint, { method, body: payload, key }, connection);
+        if (connection !== state.connection) return;
+        showToast(`Record #${result.id} saved.`, 'success');
         closeModal();
         await fetchEntityData(entityKey);
         updateDashboardStats();
-      } catch (err) {
-        showToast(`Operation failed: ${err.message}`, 'error');
+      } catch (error) {
+        if (connection === state.connection) showToast(error.message, 'error');
+      } finally {
+        submit.disabled = false;
       }
     }
 
     // DELETE MODAL & ACTION
     function openDeleteModal(entityKey, id) {
+      if (!mayWrite(entityKey, 'DELETE')) return;
       state.deleteTarget = { entity: entityKey, id };
-      document.getElementById('deleteConfirmText').innerText = `Are you sure you want to delete ${ENTITY_CONFIG[entityKey].title.slice(0, -1)} #${id}?`;
+      document.getElementById('deleteConfirmText').innerText = `Are you sure you want to delete record #${id} in ${ENTITY_CONFIG[entityKey].title}?`;
       document.getElementById('deleteModal').classList.remove('hidden');
     }
 
@@ -648,21 +805,22 @@
     async function executeDelete() {
       if (!state.deleteTarget) return;
       const { entity, id } = state.deleteTarget;
-      const config = ENTITY_CONFIG[entity];
-
+      if (!mayWrite(entity, 'DELETE')) return;
+      const button = $('confirmDeleteBtn');
+      if (button.disabled) return;
+      const connection = state.connection;
+      button.disabled = true;
       try {
-        const response = await fetch(`${API_BASE}${config.endpoint}/${id}`, {
-          method: 'DELETE'
-        });
-
-        if (!response.ok) throw new Error(`Delete failed with status ${response.status}`);
-
-        showToast('Record deleted successfully!', 'success');
+        await request(`${ENTITY_CONFIG[entity].endpoint}/${id}`, { method: 'DELETE' }, connection);
+        if (connection !== state.connection) return;
+        showToast('Record deleted successfully.', 'success');
         closeDeleteModal();
         await fetchEntityData(entity);
         updateDashboardStats();
-      } catch (err) {
-        showToast(`Error deleting record: ${err.message}`, 'error');
+      } catch (error) {
+        if (connection === state.connection) showToast(error.message, 'error');
+      } finally {
+        button.disabled = false;
       }
     }
 
@@ -676,7 +834,7 @@
       const icon = isSuccess ? 'fa-circle-check' : 'fa-triangle-exclamation';
 
       toast.className = `pointer-events-auto border px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-xs font-semibold backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 ${bgColor}`;
-      toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i> <span>${message}</span>`;
+      toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i> <span>${escapeHtml(message)}</span>`;
 
       container.appendChild(toast);
 

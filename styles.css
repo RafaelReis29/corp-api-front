@@ -33,3 +33,116 @@
     .badge-post { background-color: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid #a855f7; }
     .badge-put { background-color: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid #eab308; }
     .badge-delete { background-color: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid #ef4444; }
+
+    .connection-panel {
+      display: flex;
+      align-items: end;
+      flex-wrap: wrap;
+      gap: .75rem;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid #2a264e;
+      border-radius: 1rem;
+      background: #1b1834;
+    }
+
+    .connection-panel label {
+      display: flex;
+      flex: 1 1 10rem;
+      flex-direction: column;
+      gap: .25rem;
+      font-size: .8rem;
+      color: #cbd5e1;
+    }
+
+    .connection-panel label:first-child {
+      flex-basis: 16rem;
+    }
+
+    .connection-panel :is(input, select, button),
+    .record-dialog {
+      padding: .5rem .75rem;
+      border: 1px solid #4e487c;
+      border-radius: .6rem;
+      background: #131126;
+      color: #f2f0ff;
+    }
+
+    .connection-panel .connection-primary {
+      background: #52e085;
+      color: #131126;
+      font-weight: 700;
+    }
+
+    #connectionStatus {
+      flex-basis: 100%;
+      font-size: .8rem;
+    }
+
+    .record-dialog {
+      width: min(42rem, 92vw);
+      max-height: 85vh;
+      overflow: auto;
+    }
+
+    .record-dialog::backdrop {
+      background: #000a;
+    }
+
+    [data-requires-write][hidden], [hidden] {
+      display: none !important;
+    }
+
+    .admin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+      gap: 1rem;
+    }
+
+    .admin-card {
+      padding: 1rem;
+      border: 1px solid #2a264e;
+      border-radius: 1rem;
+      background: #1b1834;
+      font-size: .85rem;
+    }
+
+    .admin-card label {
+      display: block;
+      color: #cbd5e1;
+    }
+
+    .admin-card :is(input, select) {
+      width: 100%;
+      padding: .5rem .75rem;
+      border: 1px solid #4e487c;
+      border-radius: .6rem;
+      background: #131126;
+    }
+
+    .admin-card .admin-primary {
+      padding: .5rem .75rem;
+      border-radius: .6rem;
+      background: #52e085;
+      color: #131126;
+      font-weight: 700;
+    }
+
+    .admin-table {
+      width: 100%;
+      text-align: left;
+    }
+
+    .admin-table :is(th, td) {
+      padding: .6rem;
+      border-bottom: 1px solid #2a264e;
+    }
+
+    .admin-table td button {
+      margin-right: .75rem;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: .6;
+    }
