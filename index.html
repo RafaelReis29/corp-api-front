@@ -11,11 +11,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+  <link rel="stylesheet" href="./tailwind.css">
   <link rel="stylesheet" href="./styles.css">
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="./api.js" defer></script>
   <script src="./app.js" defer></script>
+  <script src="./admin.js" defer></script>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-neonGreen selection:text-bgDark">
 
@@ -102,6 +102,10 @@
           </div>
           <span id="count-invoices" class="text-xs bg-slate-800 text-gray-400 px-2 py-0.5 rounded-full">--</span>
         </button>
+        <button data-action="switch-tab" data-tab="admin" id="nav-admin" hidden class="nav-btn w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-300 hover:bg-borderDark/50">
+          <i class="fa-solid fa-shield-halved w-5 text-center text-neonGreen"></i>
+          <span>Administration</span>
+        </button>
       </nav>
 
       <!-- BASE URL INFO BOX -->
@@ -119,7 +123,7 @@
 
       <form id="connectionForm" class="connection-panel" aria-label="API connection">
         <label>API URL <input id="apiUrl" type="url" required></label>
-        <label>API key <input id="apiKey" type="password" autocomplete="off" placeholder="Enter a client key"></label>
+        <label>API key <input id="apiKey" type="password" autocomplete="off" placeholder="Enter a client or admin key"></label>
         <label>API version
           <select id="apiVersion">
             <option value="1.0.0">1.0.0</option>
@@ -132,12 +136,8 @@
         <p id="connectionStatus" role="status"></p>
       </form>
 
-      <!-- COLD START / CONNECTION BANNER -->
-      <div id="coldStartBanner" class="hidden mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3 text-sm">
-        <i class="fa-solid fa-circle-notch fa-spin text-amber-400 text-lg"></i>
-        <div>
-          <span class="font-semibold">Waking up API Server...</span> Render instances go to sleep after inactivity. The first request might take 50 seconds or more. Please wait while we reconnect.
-        </div>
+      <div id="adminContextPanel" class="connection-panel" hidden>
+        <label>Account for record operations <select id="adminContext"></select></label>
       </div>
 
       <!-- ACTIVE FILTER BANNER (For Relational Navigation) -->
@@ -272,6 +272,65 @@
 
       <!-- DYNAMIC ENTITY SECTIONS CONTAINER (Companies, Contacts, Contracts, Payment Methods, Invoices) -->
       <div id="entitySectionsContainer"></div>
+
+      <section id="sec-admin" class="tab-content hidden space-y-5">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <h2 class="text-2xl font-bold text-white">Administration</h2>
+          <button id="adminReload" class="text-sm text-neonGreen">Refresh accounts and keys</button>
+        </div>
+        <p id="adminStatus" class="text-sm" role="status"></p>
+
+        <div class="admin-grid">
+          <section class="admin-card space-y-3">
+            <h3 class="font-bold text-white">Accounts</h3>
+            <label for="adminAccountSelect">Choose an account</label>
+            <select id="adminAccountSelect"></select>
+            <p id="adminAccountId" class="text-xs text-slate-300 break-all"></p>
+            <div class="flex flex-wrap gap-3">
+              <button id="adminInspectAccount" class="text-neonGreen">View account details</button>
+              <button data-action="switch-tab" data-tab="dashboard" class="text-neonGreen">Open account records</button>
+            </div>
+            <form id="adminNewAccount" class="space-y-2" autocomplete="off">
+              <label for="adminAccountName">New account name</label>
+              <input id="adminAccountName" name="name" required maxlength="80">
+              <button type="submit" class="admin-primary">Create account</button>
+            </form>
+          </section>
+
+          <section class="admin-card space-y-3">
+            <h3 class="font-bold text-white">Issue a key for the selected account</h3>
+            <p id="adminKeyHint" class="text-slate-300" hidden>The Demo account uses its public read-only key.</p>
+            <form id="adminNewKey" class="space-y-2" autocomplete="off" hidden>
+              <label for="adminKeyLabel">Key label</label>
+              <input id="adminKeyLabel" name="label" required maxlength="80">
+              <label for="adminKeyType">Plan</label>
+              <select id="adminKeyType" name="type">
+                <option value="BASIC">Basic · 60 req/min</option>
+                <option value="PREMIUM">Premium · 300 req/min</option>
+              </select>
+              <button type="submit" class="admin-primary">Issue API key</button>
+            </form>
+            <div id="adminIssuedKey" class="space-y-2" hidden>
+              <p>Copy the key now. Key details show metadata only.</p>
+              <output id="adminSecret" class="block break-all font-mono text-neonGreen"></output>
+              <div class="flex flex-wrap gap-3">
+                <button id="adminCopySecret" class="text-neonGreen">Copy key</button>
+                <button id="adminDismissSecret">Hide key</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section class="admin-card">
+          <h3 class="font-bold text-white mb-3">API keys across all accounts</h3>
+          <div class="overflow-x-auto">
+            <table class="admin-table">
+              <thead><tr><th>Label</th><th>Account</th><th>Plan</th><th>Issued at</th><th>Actions</th></tr></thead>
+              <tbody id="adminKeysBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
 
     </main>
   </div>

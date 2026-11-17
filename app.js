@@ -1,25 +1,3 @@
-    if (window.tailwind) window.tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            bgDark: '#131126',
-            cardDark: '#1b1834',
-            borderDark: '#2a264e',
-            neonGreen: '#52e085',
-            neonGreenHover: '#3fd073',
-            neonPurple: '#a855f7',
-            neonYellow: '#eab308',
-            neonRed: '#ef4444',
-            neonBlue: '#3b82f6'
-          },
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-          }
-        }
-      }
-    };
-
     const $ = id => document.getElementById(id);
     const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -37,10 +15,13 @@
 
     function request(path, options, connection = state.connection) {
       if (!connection) return Promise.reject(new Error('Connect to the API first.'));
-      return apiRequest({ ...connection, signal: connection.controller.signal }, path, options);
+      const isDomainResource = !/^\/(accounts|api-keys)(?:[/?]|$)/.test(path);
+      const accountId = isDomainResource && connection.role === 'admin' ? connection.accountId : undefined;
+      return apiRequest({ ...connection, signal: connection.controller.signal }, path, { accountId, ...options });
     }
 
     function mayWrite(entity, method) {
+      if (state.connection?.role === 'admin') return Boolean(state.connection.accountId);
       return state.connection?.role === 'client' && !(method === 'DELETE' && entity === 'companies');
     }
 
@@ -91,7 +72,7 @@
         relationalActions: [
           { label: "Contacts", icon: "fa-users", entity: "contacts", field: "companyId", color: "text-purple-400 border-purple-500/30 bg-purple-500/10" },
           { label: "Contracts", icon: "fa-file-contract", entity: "contracts", field: "companyId", color: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
-          { label: "Payments", icon: "fa-credit-card", entity: "payment-methods", field: "companyId", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" }
+          { label: "Payment Methods", icon: "fa-credit-card", entity: "payment-methods", field: "companyId", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" }
         ]
       },
       contacts: {
@@ -203,6 +184,7 @@
     // INIT
     window.addEventListener('DOMContentLoaded', () => {
       bindUiEvents();
+      bindAdminEvents();
       buildEntitySections();
       $('apiUrl').value = LOCAL_HOSTS.includes(location.hostname) ? 'http://localhost:8080' : PRODUCTION_API;
       connect(DEMO_KEY);
@@ -217,7 +199,7 @@
 
         switch (button.dataset.action) {
           case 'use-demo':
-            $('apiKey').value = '';
+            disconnect();
             connect(DEMO_KEY);
             break;
           case 'view-entity':
@@ -283,6 +265,17 @@
       });
     }
 
+    function disconnect() {
+      state.connectionAttempt += 1;
+      state.connection?.controller.abort();
+      state.connection = null;
+      $('apiKey').value = '';
+      $('statusText').textContent = 'Disconnected';
+      $('statusDot').className = 'w-2.5 h-2.5 rounded-full bg-yellow-400';
+      renderAdminConnection();
+      resetRecords();
+    }
+
     function keyForTarget() {
       try {
         return state.connection?.base === apiUrl($('apiUrl').value) ? state.connection.key : DEMO_KEY;
@@ -302,7 +295,20 @@
       const attempt = ++state.connectionAttempt;
       $('connectionStatus').textContent = 'Connecting…';
       try {
-        await request('/companies?size=1', {}, connection);
+        if (connection.role === 'client') {
+          try {
+            connection.accounts = await request('/accounts', {}, connection);
+            connection.role = 'admin';
+            connection.adminPosts = new Map();
+            const previousAccountId = state.connection?.key === key && state.connection.base === connection.base
+              ? state.connection.accountId : undefined;
+            connection.accountId = connection.accounts.find(account => account.id === previousAccountId)?.id
+              ?? connection.accounts.find(account => account.demo)?.id ?? connection.accounts[0]?.id;
+          } catch (error) {
+            if (!(error instanceof ApiError) || error.status !== 403) throw error;
+          }
+        }
+        if (connection.role !== 'admin') await request('/companies?size=1', {}, connection);
         if (attempt !== state.connectionAttempt) return;
         state.connection?.controller.abort();
         state.connection = connection;
@@ -314,11 +320,18 @@
         $('statusText').textContent = 'API Connected';
         $('statusDot').className = 'w-2.5 h-2.5 rounded-full bg-neonGreen';
         $('connectionStatus').textContent = connection.role === 'demo'
-          ? 'Demo account · read only' : 'Client key · records associated with your account';
+          ? 'Demo account · read only'
+          : connection.role === 'admin' ? 'Administrator · select an account to access its records'
+            : 'Client key · records associated with your account';
+        renderAdminConnection();
         resetRecords();
         await refreshAllData();
       } catch (error) {
         if (attempt !== state.connectionAttempt) return;
+        if (state.connection) {
+          $('apiUrl').value = state.connection.base;
+          $('apiVersion').value = state.connection.version;
+        }
         $('statusText').textContent = state.connection ? 'API Connected' : 'Connection failed';
         $('connectionStatus').textContent = error.message;
       }
@@ -364,7 +377,7 @@
     async function fetchEntityData(entityKey) {
       const config = ENTITY_CONFIG[entityKey];
       const connection = state.connection;
-      if (!connection) return;
+      if (!connection || (connection.role === 'admin' && !connection.accountId)) return;
       try {
         const records = [];
         let page = 0;
@@ -443,7 +456,7 @@
                 <i class="fa-solid fa-rotate text-neonGreen"></i>
               </button>
               <button data-action="create-entity" data-entity="${key}" data-requires-write hidden class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neonGreen hover:bg-neonGreenHover text-bgDark font-bold text-xs transition-all shadow-md shadow-neonGreen/10">
-                <i class="fa-solid fa-plus"></i> New ${config.title.slice(0, -1)}
+                <i class="fa-solid fa-plus"></i> New record
               </button>
             </div>
           </div>
@@ -544,13 +557,13 @@
             ${columnsHtml}
             ${relationalHtml}
             <td class="px-4 py-3 text-right whitespace-nowrap space-x-1">
-              <button data-action="view-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-300 hover:text-neonGreen" title="View record">
+              <button data-action="view-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-300 hover:text-neonGreen" title="View record" aria-label="View record">
                 <i class="fa-solid fa-eye"></i>
               </button>
-              ${mayWrite(key, 'PUT') ? `<button data-action="edit-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-400 hover:text-neonGreen hover:bg-borderDark transition-all" title="Edit">
+              ${mayWrite(key, 'PUT') ? `<button data-action="edit-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-400 hover:text-neonGreen hover:bg-borderDark transition-all" title="Edit" aria-label="Edit record">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>` : ''}
-              ${mayWrite(key, 'DELETE') ? `<button data-action="delete-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-borderDark transition-all" title="Delete">
+              ${mayWrite(key, 'DELETE') ? `<button data-action="delete-entity" data-entity="${key}" data-id="${escapeHtml(row.id)}" class="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-borderDark transition-all" title="Delete" aria-label="Delete record">
                 <i class="fa-solid fa-trash-can"></i>
               </button>` : ''}
             </td>
@@ -641,12 +654,16 @@
       try {
         const record = await readRecord(entity, id, connection);
         if (connection !== state.connection) return;
-        $('detailTitle').textContent = `${ENTITY_CONFIG[entity].title} · #${id}`;
-        $('detailBody').textContent = JSON.stringify(record, null, 2);
-        if (!$('detailModal').open) $('detailModal').showModal();
+        showRecordDetails(`${ENTITY_CONFIG[entity].title} · #${id}`, record);
       } catch (error) {
         if (connection === state.connection) showToast(error.message, 'error');
       }
+    }
+
+    function showRecordDetails(title, record) {
+      $('detailTitle').textContent = title;
+      $('detailBody').textContent = JSON.stringify(record, null, 2);
+      if (!$('detailModal').open) $('detailModal').showModal();
     }
 
     async function openEditModal(entity, id) {
@@ -683,8 +700,8 @@
         if (field.type === 'textarea') {
           return `
             <div>
-              <label class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
-              <textarea name="${field.name}" rows="3" ${field.required ? 'required' : ''}
+              <label for="field-${field.name}" class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
+              <textarea id="field-${field.name}" name="${field.name}" rows="3" ${field.required ? 'required' : ''}
                         class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">${escapeHtml(val)}</textarea>
             </div>`;
         }
@@ -692,8 +709,8 @@
         if (field.type === 'select') {
           return `
             <div>
-              <label class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
-              <select name="${field.name}" ${field.required ? 'required' : ''}
+              <label for="field-${field.name}" class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
+              <select id="field-${field.name}" name="${field.name}" ${field.required ? 'required' : ''}
                       class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">
                 ${field.options.map(opt => `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`).join('')}
               </select>
@@ -702,8 +719,8 @@
 
         return `
           <div>
-            <label class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
-            <input type="${field.type}" name="${field.name}" value="${escapeHtml(val)}" ${field.min ? `min="${field.min}"` : ''} ${field.step ? `step="${field.step}"` : ''} ${field.required ? 'required' : ''}
+            <label for="field-${field.name}" class="block text-xs font-semibold text-gray-400 mb-1">${field.label} ${field.required ? '*' : ''}</label>
+            <input id="field-${field.name}" type="${field.type}" name="${field.name}" value="${escapeHtml(val)}" ${field.min ? `min="${field.min}"` : ''} ${field.step ? `step="${field.step}"` : ''} ${field.required ? 'required' : ''}
                    class="w-full bg-bgDark border border-borderDark rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neonGreen">
           </div>`;
       }).join('');
@@ -777,7 +794,7 @@
     function openDeleteModal(entityKey, id) {
       if (!mayWrite(entityKey, 'DELETE')) return;
       state.deleteTarget = { entity: entityKey, id };
-      document.getElementById('deleteConfirmText').innerText = `Are you sure you want to delete ${ENTITY_CONFIG[entityKey].title.slice(0, -1)} #${id}?`;
+      document.getElementById('deleteConfirmText').innerText = `Are you sure you want to delete record #${id} in ${ENTITY_CONFIG[entityKey].title}?`;
       document.getElementById('deleteModal').classList.remove('hidden');
     }
 

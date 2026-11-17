@@ -92,3 +92,57 @@
     [data-requires-write][hidden], [hidden] {
       display: none !important;
     }
+
+    .admin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+      gap: 1rem;
+    }
+
+    .admin-card {
+      padding: 1rem;
+      border: 1px solid #2a264e;
+      border-radius: 1rem;
+      background: #1b1834;
+      font-size: .85rem;
+    }
+
+    .admin-card label {
+      display: block;
+      color: #cbd5e1;
+    }
+
+    .admin-card :is(input, select) {
+      width: 100%;
+      padding: .5rem .75rem;
+      border: 1px solid #4e487c;
+      border-radius: .6rem;
+      background: #131126;
+    }
+
+    .admin-card .admin-primary {
+      padding: .5rem .75rem;
+      border-radius: .6rem;
+      background: #52e085;
+      color: #131126;
+      font-weight: 700;
+    }
+
+    .admin-table {
+      width: 100%;
+      text-align: left;
+    }
+
+    .admin-table :is(th, td) {
+      padding: .6rem;
+      border-bottom: 1px solid #2a264e;
+    }
+
+    .admin-table td button {
+      margin-right: .75rem;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: .6;
+    }
