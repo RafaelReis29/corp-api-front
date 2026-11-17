@@ -29,6 +29,7 @@
     const state = {
       activeTab: 'dashboard',
       connection: null,
+      pendingConnection: null,
       connectionAttempt: 0,
       pendingPost: null,
       activeFilter: null, // { entity: 'contacts', field: 'companyId', value: 3, label: 'Company #3' }
@@ -186,7 +187,7 @@
       bindUiEvents();
       bindAdminEvents();
       buildEntitySections();
-      $('apiUrl').value = LOCAL_HOSTS.includes(location.hostname) ? 'http://localhost:8080' : PRODUCTION_API;
+      $('apiUrl').value = PRODUCTION_API;
       connect(DEMO_KEY);
     });
 
@@ -267,6 +268,8 @@
 
     function disconnect() {
       state.connectionAttempt += 1;
+      state.pendingConnection?.controller.abort();
+      state.pendingConnection = null;
       state.connection?.controller.abort();
       state.connection = null;
       $('apiKey').value = '';
@@ -293,7 +296,11 @@
         return;
       }
       const attempt = ++state.connectionAttempt;
-      $('connectionStatus').textContent = 'Connecting…';
+      state.pendingConnection?.controller.abort();
+      state.pendingConnection = connection;
+      $('statusText').textContent = 'Connecting…';
+      $('statusDot').className = 'w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse';
+      $('connectionStatus').textContent = 'Connecting… Render may take up to 90 seconds to start.';
       try {
         if (connection.role === 'client') {
           try {
@@ -312,6 +319,8 @@
         if (attempt !== state.connectionAttempt) return;
         state.connection?.controller.abort();
         state.connection = connection;
+        state.pendingConnection = null;
+        $('apiUrl').value = connection.base;
         $('apiKey').value = '';
         $('currentApiUrl').textContent = connection.base;
         document.querySelectorAll('[data-swagger-link]').forEach(link => {
@@ -328,12 +337,20 @@
         await refreshAllData();
       } catch (error) {
         if (attempt !== state.connectionAttempt) return;
+        connection.controller.abort();
         if (state.connection) {
           $('apiUrl').value = state.connection.base;
           $('apiVersion').value = state.connection.version;
         }
         $('statusText').textContent = state.connection ? 'API Connected' : 'Connection failed';
-        $('connectionStatus').textContent = error.message;
+        $('statusDot').className = state.connection
+          ? 'w-2.5 h-2.5 rounded-full bg-neonGreen'
+          : 'w-2.5 h-2.5 rounded-full bg-red-400';
+        $('connectionStatus').textContent = state.connection
+          ? `Connection attempt failed. Previous connection retained. ${error.message}`
+          : error.message;
+      } finally {
+        if (state.pendingConnection === connection) state.pendingConnection = null;
       }
     }
 
