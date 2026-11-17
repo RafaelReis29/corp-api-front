@@ -9,17 +9,23 @@ function idempotencyKey() {
 
 function apiUrl(value) {
   const url = new URL(value.trim());
+  const documentationPath = /\/(?:swagger-ui(?:\/.*)?|v3\/api-docs(?:\/.*)?)\/?$/;
+  if (documentationPath.test(url.pathname)) {
+    url.pathname = url.pathname.replace(documentationPath, '');
+    url.hash = '';
+  }
   const local = LOCAL_HOSTS.includes(url.hostname);
   if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) ||
       url.username || url.password || url.search || url.hash) {
     throw new Error('Use an HTTPS API URL, or HTTP on localhost.');
   }
-  return url.href.replace(/\/$/, '');
+  return url.href.replace(/\/+$/, '');
 }
 
 class ApiError extends Error {
   constructor(response, problem) {
-    const fields = (problem?.errors || []).map(error => `${error.field}: ${error.message}`);
+    const fields = (Array.isArray(problem?.errors) ? problem.errors : [])
+      .map(error => `${error.field}: ${error.message}`);
     const retry = response.headers.get('Retry-After');
     super([problem?.detail || `HTTP ${response.status}`, ...fields,
       retry && `Retry in ${retry} seconds.`].filter(Boolean).join(' '));
@@ -38,13 +44,40 @@ async function apiRequest(connection, path, { method = 'GET', body, key, account
   }
   if (body !== undefined) headers.set('Content-Type', 'application/json');
 
-  const response = await fetch(connection.base + path, {
-    method, headers, signal: connection.signal, credentials: 'omit', redirect: 'error',
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
-  if (response.status === 204) return null;
-  const data = await response.json().catch(() => null);
-  if (!response.ok) throw new ApiError(response, data);
-  if (data === null) throw new Error('The API response did not contain JSON.');
-  return data;
+  const controller = new AbortController();
+  const abort = () => controller.abort(connection.signal.reason);
+  if (connection.signal?.aborted) abort();
+  else connection.signal?.addEventListener('abort', abort, { once: true });
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 90000);
+  try {
+    const response = await fetch(connection.base + path, {
+      method, headers, signal: controller.signal, credentials: 'omit', redirect: 'error',
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    if (response.status === 204) return null;
+    const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = null; }
+    if (!response.ok) throw new ApiError(response, data);
+    if (data === null) throw new Error('The API returned an invalid JSON response. Check the API URL.');
+    return data;
+  } catch (error) {
+    if (connection.signal?.aborted) throw error;
+    if (timedOut) throw new Error('The API did not respond within 90 seconds. Render may be starting. Try connecting again.');
+    if (error instanceof TypeError) {
+      const origin = location.origin;
+      const hint = origin === 'null'
+        ? 'Serve this dashboard over HTTP or HTTPS before connecting.'
+        : `Check the API URL and network. On the API server, CORP_API_CORS_ORIGINS must include ${origin}.`;
+      throw new Error(`Could not reach ${connection.base}. ${hint}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    connection.signal?.removeEventListener('abort', abort);
+  }
 }
